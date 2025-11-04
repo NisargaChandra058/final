@@ -90,7 +90,7 @@ try {
 </head>
 <body>
     <div class="navbar">
-        <a href="generate-paper.php">Create Question Paper</a>
+        <a href="create-question.php">Create Question Paper</a>
         <a href="assign-test.php">Assign Test</a>
         <a href="correct-test.php">Correct Tests</a>
         <!-- Add links relevant for staff as features are built -->
