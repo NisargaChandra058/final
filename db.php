@@ -4,12 +4,17 @@ $database_url = getenv('DATABASE_URL');
 
 if ($database_url === false) {
     // Try falling back to Docker Compose environment variables if DATABASE_URL isn't set
-    $db_host = getenv('DB_HOST') ?: 'db'; // Default to 'db' service name in Docker Compose
-    $db_port = getenv('DB_PORT') ?: '5432';
-    $db_name = getenv('DB_NAME') ?: 'admission_db';
-    $db_user = getenv('DB_USER') ?: 'user';
-    $db_pass = getenv('DB_PASSWORD') ?: 'password';
-    $dsn = "pgsql:host=$db_host;port=$db_port;dbname=$db_name;sslmode=prefer"; // sslmode=prefer for local dev
+    $host = getenv('DB_HOST') ?: 'db';
+    $port = getenv('DB_PORT') ?: '5432';
+    $dbname = getenv('DB_NAME') ?: 'admission_db';
+    
+    // --- THIS IS THE FIX ---
+    // Assign to $user and $password, not $db_user and $db_pass
+    $user = getenv('DB_USER') ?: 'user';
+    $password = getenv('DB_PASSWORD') ?: 'password';
+    // --- END OF FIX ---
+
+    $dsn = "pgsql:host=$host;port=$port;dbname=$dbname;sslmode=prefer"; // sslmode=prefer for local dev
 } else {
     // Parse the connection URL provided by Render/Neon
     $db_parts = parse_url($database_url);
@@ -24,6 +29,7 @@ if ($database_url === false) {
 
 
 try {
+    // Now, $user and $password will be correctly defined no matter which path was taken
     $pdo = new PDO($dsn, $user, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
