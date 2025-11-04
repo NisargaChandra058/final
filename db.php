@@ -27,18 +27,19 @@ try {
     $pdo = new PDO($dsn, $user, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    // Create table if it doesn't exist
+    // Create table if it doesn't exist (includes password column)
     $pdo->exec("CREATE TABLE IF NOT EXISTS students (
         id SERIAL PRIMARY KEY,
         student_id_text VARCHAR(20) UNIQUE,
+        usn VARCHAR(20) UNIQUE, /* Added USN column */
         student_name VARCHAR(255),
         dob DATE,
         father_name VARCHAR(255),
         mother_name VARCHAR(255),
         mobile_number VARCHAR(20),
         parent_mobile_number VARCHAR(20),
-        email VARCHAR(255) UNIQUE, /* Added UNIQUE constraint for login */
-        password VARCHAR(255), /* Added password column */
+        email VARCHAR(255) UNIQUE,
+        password VARCHAR(255),
         permanent_address TEXT,
         previous_college VARCHAR(255),
         previous_combination VARCHAR(50),
@@ -58,10 +59,11 @@ try {
         submission_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );");
 
-    // Add password column if it doesn't exist (safe to run multiple times)
+    // Add columns/constraints if they don't exist (safe to run multiple times)
     $pdo->exec("ALTER TABLE students ADD COLUMN IF NOT EXISTS password VARCHAR(255);");
-    // Add UNIQUE constraint to email if it doesn't exist
+    $pdo->exec("ALTER TABLE students ADD COLUMN IF NOT EXISTS usn VARCHAR(20);");
     $pdo->exec("ALTER TABLE students ADD CONSTRAINT students_email_unique UNIQUE (email);");
+    $pdo->exec("ALTER TABLE students ADD CONSTRAINT students_usn_unique UNIQUE (usn);");
 
 
 } catch (PDOException $e) {
@@ -69,4 +71,3 @@ try {
     die("Database connection failed: " . $e->getMessage());
 }
 ?>
-
