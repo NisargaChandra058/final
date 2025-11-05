@@ -1,64 +1,72 @@
 <?php
-// session_start(); // Uncomment if using authentication
-require_once('db.php'); // Your PDO connection from db.php
+require_once('db.php'); // Database connection
 
-$message = ''; // For success/error messages
+$message = '';
 
-// Handle form submission (optional)
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $semester_id = filter_input(INPUT_POST, 'semester_id', FILTER_VALIDATE_INT);
     $subject_id = filter_input(INPUT_POST, 'subject_id', FILTER_VALIDATE_INT);
-    $student_id = filter_input(INPUT_POST, 'student_id', FILTER_VALIDATE_INT);
+    $selected_students = $_POST['students'] ?? [];
 
-    if ($semester_id && $subject_id && $student_id) {
+    if ($semester_id && $subject_id && !empty($selected_students)) {
         try {
-            // Example insert – you can replace this with your test allocation logic
-            $sql = "INSERT INTO test_allocation (class_id, qp_id)
-                    VALUES (:class_id, :qp_id)
-                    ON CONFLICT (class_id, qp_id) DO NOTHING";
-            // Placeholder (modify for your use case)
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([':class_id' => $semester_id, ':qp_id' => $subject_id]); // just example
-            $message = "<p class='message success'>Assigned successfully!</p>";
+            $pdo->beginTransaction();
+
+            // Example: assign subject/test to selected students
+            $stmt = $pdo->prepare("
+                INSERT INTO test_allocation (class_id, qp_id)
+                VALUES (:student_id, :subject_id)
+                ON CONFLICT DO NOTHING
+            ");
+
+            foreach ($selected_students as $student_id) {
+                $stmt->execute([
+                    ':student_id' => $student_id,
+                    ':subject_id' => $subject_id
+                ]);
+            }
+
+            $pdo->commit();
+            $message = "<p class='message success'>Assigned successfully to selected students!</p>";
         } catch (PDOException $e) {
+            $pdo->rollBack();
             $message = "<p class='message error'>Database error: " . htmlspecialchars($e->getMessage()) . "</p>";
         }
     } else {
-        $message = "<p class='message error'>Please select all required fields.</p>";
+        $message = "<p class='message error'>Please select a semester, subject, and at least one student.</p>";
     }
 }
 
-// --- Fetch semesters for dropdown ---
+// --- Fetch dropdown data ---
 try {
-    $sem_stmt = $pdo->query("SELECT id, name FROM semesters ORDER BY name");
-    $semesters = $sem_stmt->fetchAll(PDO::FETCH_ASSOC);
+    $semesters = $pdo->query("SELECT id, name FROM semesters ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 
-    // Fetch subjects grouped by semester
-    $subjects_stmt = $pdo->query("SELECT id, name, semester AS semester_id FROM subjects ORDER BY name");
+    // Fetch subjects by semester
+    $subjects_stmt = $pdo->query("SELECT id, name, semester_id FROM subjects ORDER BY name");
     $subjects_by_semester = [];
     while ($subject = $subjects_stmt->fetch(PDO::FETCH_ASSOC)) {
         $subjects_by_semester[$subject['semester_id']][] = $subject;
     }
 
-    // Fetch students grouped by semester (assuming 'classes' link students to semesters)
+    // Fetch students by semester
+    // Ensure your students table has semester_id or join via classes
     $students_stmt = $pdo->query("
         SELECT s.id, s.student_name, c.semester_id
         FROM students s
-        JOIN classes c ON s.allotted_branch_management IS NOT NULL OR s.allotted_branch_kea IS NOT NULL
-        LEFT JOIN classes cl ON c.id = cl.id
+        JOIN classes c ON c.id = s.class_id
         WHERE c.semester_id IS NOT NULL
         ORDER BY s.student_name
     ");
     $students_by_semester = [];
-    while ($row = $students_stmt->fetch(PDO::FETCH_ASSOC)) {
-        $students_by_semester[$row['semester_id']][] = $row;
+    while ($student = $students_stmt->fetch(PDO::FETCH_ASSOC)) {
+        $students_by_semester[$student['semester_id']][] = $student;
     }
 
 } catch (PDOException $e) {
     die("Error fetching data: " . htmlspecialchars($e->getMessage()));
 }
 
-// Pass data to JS
+// Pass data to JavaScript
 $subjects_json = json_encode($subjects_by_semester);
 $students_json = json_encode($students_by_semester);
 ?>
@@ -67,7 +75,7 @@ $students_json = json_encode($students_by_semester);
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Assign Test / Subject / Student</title>
+    <title>Assign Test / Subject to Students</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         :root {
@@ -84,7 +92,7 @@ $students_json = json_encode($students_by_semester);
             color: var(--antiflash-white);
         }
         .container {
-            max-width: 600px;
+            max-width: 700px;
             margin: 20px auto;
             padding: 30px;
             background: rgba(141,153,174,0.1);
@@ -121,74 +129,95 @@ $students_json = json_encode($students_by_semester);
         }
         .success { background: #d4edda; color: #155724; }
         .error { background: #f8d7da; color: #721c24; }
+        .students-list {
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            padding: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .student-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 0;
+        }
+        .student-item input {
+            margin-right: 8px;
+        }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h2>Assign Based on Semester</h2>
-        <?php if (!empty($message)) echo $message; ?>
+<div class="container">
+    <h2>Assign Test / Subject to Students</h2>
+    <?php if (!empty($message)) echo $message; ?>
 
-        <form method="POST" action="">
-            <label for="semester_id">Select Semester:</label>
-            <select name="semester_id" id="semester_id" required>
-                <option value="">-- Select Semester --</option>
-                <?php foreach ($semesters as $sem): ?>
-                    <option value="<?= htmlspecialchars($sem['id']) ?>"><?= htmlspecialchars($sem['name']) ?></option>
-                <?php endforeach; ?>
-            </select>
+    <form method="POST" action="">
+        <label for="semester_id">Select Semester:</label>
+        <select name="semester_id" id="semester_id" required>
+            <option value="">-- Select Semester --</option>
+            <?php foreach ($semesters as $sem): ?>
+                <option value="<?= htmlspecialchars($sem['id']) ?>"><?= htmlspecialchars($sem['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
 
-            <label for="subject_id">Select Subject:</label>
-            <select name="subject_id" id="subject_id" required disabled>
-                <option value="">-- First select a Semester --</option>
-            </select>
+        <label for="subject_id">Select Subject:</label>
+        <select name="subject_id" id="subject_id" required disabled>
+            <option value="">-- First select a Semester --</option>
+        </select>
 
-            <label for="student_id">Select Student:</label>
-            <select name="student_id" id="student_id" required disabled>
-                <option value="">-- First select a Semester --</option>
-            </select>
+        <div id="students_section" style="display:none;">
+            <label>Students (checked = assign):</label>
+            <div class="students-list" id="students_list">
+                <!-- Filled dynamically -->
+            </div>
+        </div>
 
-            <button type="submit">Assign</button>
-        </form>
-    </div>
+        <button type="submit">Assign Selected Students</button>
+    </form>
+</div>
 
-    <script>
-        const subjectsBySemester = <?= $subjects_json ?>;
-        const studentsBySemester = <?= $students_json ?>;
+<script>
+const subjectsBySemester = <?= $subjects_json ?>;
+const studentsBySemester = <?= $students_json ?>;
 
-        const semesterSelect = document.getElementById('semester_id');
-        const subjectSelect = document.getElementById('subject_id');
-        const studentSelect = document.getElementById('student_id');
+const semesterSelect = document.getElementById('semester_id');
+const subjectSelect = document.getElementById('subject_id');
+const studentsSection = document.getElementById('students_section');
+const studentsList = document.getElementById('students_list');
 
-        semesterSelect.addEventListener('change', function() {
-            const semesterId = this.value;
+semesterSelect.addEventListener('change', function() {
+    const semId = this.value;
+    subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+    subjectSelect.disabled = true;
+    studentsList.innerHTML = '';
+    studentsSection.style.display = 'none';
 
-            // Reset subject dropdown
-            subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
-            studentSelect.innerHTML = '<option value="">-- Select Student --</option>';
-            subjectSelect.disabled = true;
-            studentSelect.disabled = true;
-
-            if (semesterId && subjectsBySemester[semesterId]) {
-                subjectSelect.disabled = false;
-                subjectsBySemester[semesterId].forEach(sub => {
-                    const opt = document.createElement('option');
-                    opt.value = sub.id;
-                    opt.textContent = sub.name;
-                    subjectSelect.appendChild(opt);
-                });
-            }
-
-            if (semesterId && studentsBySemester[semesterId]) {
-                studentSelect.disabled = false;
-                studentsBySemester[semesterId].forEach(stu => {
-                    const opt = document.createElement('option');
-                    opt.value = stu.id;
-                    opt.textContent = stu.student_name;
-                    studentSelect.appendChild(opt);
-                });
-            }
+    if (semId && subjectsBySemester[semId]) {
+        subjectSelect.disabled = false;
+        subjectsBySemester[semId].forEach(sub => {
+            const opt = document.createElement('option');
+            opt.value = sub.id;
+            opt.textContent = sub.name;
+            subjectSelect.appendChild(opt);
         });
-    </script>
+    }
+
+    if (semId && studentsBySemester[semId]) {
+        studentsSection.style.display = 'block';
+        studentsBySemester[semId].forEach(stu => {
+            const div = document.createElement('div');
+            div.className = 'student-item';
+            div.innerHTML = `
+                <label>
+                    <input type="checkbox" name="students[]" value="${stu.id}" checked>
+                    ${stu.student_name}
+                </label>
+            `;
+            studentsList.appendChild(div);
+        });
+    }
+});
+</script>
 </body>
 </html>
