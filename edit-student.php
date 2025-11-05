@@ -1,14 +1,14 @@
 <?php
 session_start();
-include('db-config.php'); // Your PDO connection file
+include('db-config.php'); // Database connection
 
-// --- Check if admin is logged in ---
+// --- Check admin session ---
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
     header("Location: login.php");
     exit;
 }
 
-// --- Check if ID provided ---
+// --- Check student ID ---
 if (!isset($_GET['id'])) {
     header("Location: view-students.php");
     exit;
@@ -19,23 +19,21 @@ $error = '';
 $student = null;
 
 try {
-    // Ensure no aborted transaction from before
+    // Reset if any previous aborted transaction exists
     if ($conn->inTransaction()) {
         $conn->rollBack();
     }
 
-    // --- Handle Update ---
-    if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // --- Handle Update Request ---
+    if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $usn = trim($_POST['usn']);
         $name = trim($_POST['name']);
         $email = trim($_POST['email']);
 
-        // Begin safe transaction
         $conn->beginTransaction();
 
-        $update_sql = "UPDATE students SET usn = ?, name = ?, email = ? WHERE id = ?";
-        $stmt = $conn->prepare($update_sql);
-        $stmt->execute([$usn, $name, $email, $student_id]);
+        $update = $conn->prepare("UPDATE students SET usn = ?, name = ?, email = ? WHERE id = ?");
+        $update->execute([$usn, $name, $email, $student_id]);
 
         $conn->commit();
 
@@ -43,7 +41,7 @@ try {
         exit;
     }
 
-    // --- Fetch student details for form ---
+    // --- Fetch student details ---
     $stmt = $conn->prepare("SELECT id, usn, name, email FROM students WHERE id = ?");
     $stmt->execute([$student_id]);
     $student = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -57,6 +55,7 @@ try {
     if ($conn->inTransaction()) {
         $conn->rollBack();
     }
+
     $error = "Database Error: " . htmlspecialchars($e->getMessage());
 }
 ?>
@@ -69,33 +68,30 @@ try {
     <title>Edit Student</title>
     <style>
         body {
-            font-family: "Segoe UI", Arial, sans-serif;
-            background: linear-gradient(135deg, #e3f2fd, #ffffff);
-            margin: 0;
-            padding: 0;
+            font-family: "Segoe UI", sans-serif;
+            background: linear-gradient(135deg, #e3f2fd, #fefefe);
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
+            height: 100vh;
+            margin: 0;
         }
         .container {
-            background-color: #fff;
-            padding: 35px;
-            border-radius: 12px;
+            background: #fff;
+            padding: 30px;
+            border-radius: 10px;
             box-shadow: 0 6px 18px rgba(0,0,0,0.1);
-            width: 90%;
-            max-width: 480px;
+            width: 400px;
         }
         h2 {
-            color: #333;
             text-align: center;
-            margin-bottom: 25px;
+            color: #333;
         }
         label {
-            display: block;
-            margin-top: 12px;
             font-weight: bold;
             color: #555;
+            margin-top: 10px;
+            display: block;
         }
         input {
             width: 100%;
@@ -104,17 +100,15 @@ try {
             border: 1px solid #ccc;
             border-radius: 6px;
             font-size: 15px;
-            box-sizing: border-box;
         }
         button {
-            margin-top: 22px;
-            padding: 12px;
             width: 100%;
+            margin-top: 20px;
+            padding: 12px;
             background: #007bff;
-            color: white;
             border: none;
+            color: #fff;
             border-radius: 6px;
-            font-size: 16px;
             font-weight: bold;
             cursor: pointer;
             transition: 0.3s;
@@ -125,19 +119,17 @@ try {
         .error {
             color: #b71c1c;
             background: #ffebee;
-            border: 1px solid #ef9a9a;
             padding: 10px;
             border-radius: 6px;
-            text-align: center;
             margin-bottom: 10px;
+            text-align: center;
         }
         .back-link {
             display: block;
-            margin-top: 15px;
             text-align: center;
+            margin-top: 12px;
             color: #007bff;
             text-decoration: none;
-            font-size: 14px;
         }
         .back-link:hover {
             text-decoration: underline;
@@ -148,26 +140,26 @@ try {
 <div class="container">
     <h2>Edit Student Details</h2>
 
-    <?php if (!empty($error)) echo "<p class='error'>$error</p>"; ?>
+    <?php if (!empty($error)) echo "<div class='error'>$error</div>"; ?>
 
     <?php if ($student): ?>
-        <form action="edit-student.php?id=<?= htmlspecialchars($student_id) ?>" method="POST">
-            <label for="usn">USN:</label>
+        <form method="POST">
+            <label for="usn">USN</label>
             <input type="text" id="usn" name="usn" value="<?= htmlspecialchars($student['usn']) ?>" required>
 
-            <label for="name">Full Name:</label>
+            <label for="name">Full Name</label>
             <input type="text" id="name" name="name" value="<?= htmlspecialchars($student['name']) ?>" required>
 
-            <label for="email">Email:</label>
+            <label for="email">Email</label>
             <input type="email" id="email" name="email" value="<?= htmlspecialchars($student['email']) ?>" required>
 
-            <button type="submit">Update Details</button>
+            <button type="submit">Update Student</button>
         </form>
     <?php else: ?>
-        <p>Could not find student details.</p>
+        <p>No student record found.</p>
     <?php endif; ?>
 
-    <a href="view-students.php" class="back-link">← Back to View Students</a>
+    <a href="view-students.php" class="back-link">← Back to Students List</a>
 </div>
 </body>
 </html>
