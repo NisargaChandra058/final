@@ -36,7 +36,7 @@ try {
     file_put_contents(__DIR__ . '/error_log.txt', $error_message, FILE_APPEND);
 
     // --- Display generic message to user ---
-    die("⚠️ Unable to connect to the database. Please try again later.");
+    die("Connection failed: " . htmlspecialchars($e->getMessage()));
 }
 
 // ✅ $conn is now your working database connection
