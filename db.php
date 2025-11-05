@@ -3,37 +3,27 @@
 $database_url = getenv('DATABASE_URL');
 
 if ($database_url === false) {
-    // Try falling back to Docker Compose environment variables if DATABASE_URL isn't set
     $host = getenv('DB_HOST') ?: 'db';
     $port = getenv('DB_PORT') ?: '5432';
     $dbname = getenv('DB_NAME') ?: 'admission_db';
-    
-    // --- THIS IS THE FIX ---
-    // Assign to $user and $password, not $db_user and $db_pass
     $user = getenv('DB_USER') ?: 'user';
     $password = getenv('DB_PASSWORD') ?: 'password';
-    // --- END OF FIX ---
-
-    $dsn = "pgsql:host=$host;port=$port;dbname=$dbname;sslmode=prefer"; // sslmode=prefer for local dev
+    $dsn = "pgsql:host=$host;port=$port;dbname=$dbname;sslmode=prefer";
 } else {
-    // Parse the connection URL provided by Render/Neon
     $db_parts = parse_url($database_url);
     $host = $db_parts['host'];
-    $port = $db_parts['port'] ?? '5432'; // Default port if missing
+    $port = $db_parts['port'] ?? '5432';
     $dbname = ltrim($db_parts['path'], '/');
     $user = $db_parts['user'];
     $password = $db_parts['pass'];
-    // Construct the DSN, adding the sslmode=require parameter which is essential for Neon
     $dsn = "pgsql:host=$host;port=$port;dbname=$dbname;sslmode=require";
 }
 
-
 try {
-    // Now, $user and $password will be correctly defined no matter which path was taken
     $pdo = new PDO($dsn, $user, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    // --- Create students table ---
+    // --- Students Table ---
     $pdo->exec("CREATE TABLE IF NOT EXISTS students (
         id SERIAL PRIMARY KEY,
         student_id_text VARCHAR(20) UNIQUE,
@@ -64,25 +54,64 @@ try {
         caste_income_url TEXT,
         submission_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );");
-
-    // Add columns/constraints if they don't exist (safe to run multiple times)
     $pdo->exec("ALTER TABLE students ADD COLUMN IF NOT EXISTS password VARCHAR(255);");
     $pdo->exec("ALTER TABLE students ADD COLUMN IF NOT EXISTS usn VARCHAR(20);");
     $pdo->exec("ALTER TABLE students ADD CONSTRAINT students_email_unique UNIQUE (email);");
     $pdo->exec("ALTER TABLE students ADD CONSTRAINT students_usn_unique UNIQUE (usn);");
 
-    // --- NEW TABLES FOR TEST ALLOCATION ---
+    // --- Users Table (for Staff/Admin) ---
+    $pdo->exec("CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        first_name VARCHAR(100),
+        surname VARCHAR(100),
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        role VARCHAR(20) NOT NULL DEFAULT 'student' -- e.g., 'student', 'staff', 'admin'
+    );");
+
+    // --- NEW: Semesters Table ---
+    $pdo->exec("CREATE TABLE IF NOT EXISTS semesters (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE -- e.g., '1st Semester', '2nd Semester'
+    );");
+
+    // --- Classes Table (NOW LINKED TO SEMESTERS) ---
     $pdo->exec("CREATE TABLE IF NOT EXISTS classes (
         id SERIAL PRIMARY KEY,
-        name VARCHAR(100) NOT NULL UNIQUE
+        name VARCHAR(100) NOT NULL UNIQUE,
+        semester_id INT -- This is the new column
+    );");
+    // Add the foreign key constraint if it doesn't exist
+    $pdo->exec("ALTER TABLE classes ADD COLUMN IF NOT EXISTS semester_id INT;");
+    // Note: We are not adding a foreign key constraint here to avoid errors if 'semesters' table is created after.
+    // In a full migration system, you'd add:
+    // FOREIGN KEY (semester_id) REFERENCES semesters(id) ON DELETE SET NULL
+
+    // --- Subjects Table ---
+    $pdo->exec("CREATE TABLE IF NOT EXISTS subjects (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        subject_code VARCHAR(20) UNIQUE NOT NULL
+    );");
+
+    // --- Subject Allocation Table ---
+    $pdo->exec("CREATE TABLE IF NOT EXISTS subject_allocation (
+        id SERIAL PRIMARY KEY,
+        staff_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        subject_id INT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        UNIQUE(staff_id, subject_id)
     );");
     
+    // --- Question Papers Table ---
     $pdo->exec("CREATE TABLE IF NOT EXISTS question_papers (
         id SERIAL PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
-        content TEXT
+        content TEXT,
+        subject_id INT REFERENCES subjects(id) ON DELETE SET NULL
     );");
+    $pdo->exec("ALTER TABLE question_papers ADD COLUMN IF NOT EXISTS subject_id INT;");
 
+    // --- Test Allocation Table ---
     $pdo->exec("CREATE TABLE IF NOT EXISTS test_allocation (
         id SERIAL PRIMARY KEY,
         class_id INT NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
@@ -90,9 +119,6 @@ try {
         UNIQUE(class_id, qp_id)
     );");
     
-    // --- (You can add other tables like users, subjects, etc. here) ---
-
-
 } catch (PDOException $e) {
     die("Database connection failed: " . $e->getMessage());
 }
