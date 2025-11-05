@@ -73,10 +73,16 @@ try {
     $staff_members = $staff_stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // --- Fetch subjects for the multi-select ---
-    // Show all subjects, let the admin decide which ones to allocate
-    $subject_stmt = $conn->prepare("SELECT id, name AS subject_name, subject_code, branch, semester FROM subjects ORDER BY name");
-    $subject_stmt->execute();
-    $available_subjects = $subject_stmt->fetchAll(PDO::FETCH_ASSOC);
+// Fetch only subjects that are NOT already allocated
+$subject_stmt = $conn->prepare("
+    SELECT s.id, s.name AS subject_name, s.subject_code, s.branch, s.semester
+    FROM subjects s
+    WHERE s.id NOT IN (SELECT subject_id FROM subject_allocation)
+    ORDER BY s.name
+");
+$subject_stmt->execute();
+$available_subjects = $subject_stmt->fetchAll(PDO::FETCH_ASSOC);
+
 
 } catch (PDOException $e) {
     if ($conn->inTransaction()) {
@@ -165,5 +171,6 @@ try {
     </div>
 </body>
 </html>
+
 
 
