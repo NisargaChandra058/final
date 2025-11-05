@@ -126,35 +126,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['usn'])) {
 
     <hr>
 
-    <h3>✏️ Manually Add a Student</h3>
-    <form method="POST">
-        <input type="text" name="usn" placeholder="USN" required><br>
-        <input type="text" name="name" placeholder="Full Name" required><br>
-        <input type="email" name="email" placeholder="Email" required><br>
-        <input type="date" name="dob"><br>
-        <textarea name="address" placeholder="Address"></textarea><br>
+    <h3>Manually Add a Student</h3>
+<form action="manual-add-student.php" method="POST">
+    <input type="text" name="usn" placeholder="USN" required>
+    <input type="text" name="name" placeholder="Full Name" required>
+    <input type="email" name="email" placeholder="Email" required>
+    <input type="date" name="dob" required>
+    <textarea name="address" placeholder="Address"></textarea>
 
-        <label>Branch:</label>
-        <select name="branch" required>
-            <option value="CSE">CSE</option>
-            <option value="ECE">ECE</option>
-            <option value="MECH">MECH</option>
-            <option value="CIVIL">CIVIL</option>
-        </select><br>
+    <!-- Branch Selection -->
+    <select name="branch" required>
+        <option value="">-- Select Branch --</option>
+        <option value="CSE">CSE</option>
+        <option value="ECE">ECE</option>
+        <option value="MECH">MECH</option>
+        <option value="CIVIL">CIVIL</option>
+    </select>
 
-        <label>Semester:</label>
-        <select name="semester" required>
-            <?php
-            $semesters = $pdo->query("SELECT id, name FROM semesters ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
-            foreach ($semesters as $sem) {
-                echo "<option value='{$sem['id']}'>{$sem['name']}</option>";
-            }
-            ?>
-        </select><br>
+    <!-- Semester Selection -->
+    <select name="semester" required>
+        <option value="">-- Select Semester --</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+        <option value="6">6</option>
+        <option value="7">7</option>
+        <option value="8">8</option>
+    </select>
 
-        <input type="password" name="password" placeholder="Password" required><br>
-        <button type="submit">Add Student</button>
-    </form>
+    <input type="password" name="password" placeholder="Password" required>
+    <button type="submit" class="btn">Add Student</button>
+</form>
 </div>
 </body>
 </html>
