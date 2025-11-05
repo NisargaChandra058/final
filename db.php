@@ -54,10 +54,33 @@ try {
         caste_income_url TEXT,
         submission_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );");
+
+    // Add columns if they don't exist
     $pdo->exec("ALTER TABLE students ADD COLUMN IF NOT EXISTS password VARCHAR(255);");
     $pdo->exec("ALTER TABLE students ADD COLUMN IF NOT EXISTS usn VARCHAR(20);");
-    $pdo->exec("ALTER TABLE students ADD CONSTRAINT students_email_unique UNIQUE (email);");
-    $pdo->exec("ALTER TABLE students ADD CONSTRAINT students_usn_unique UNIQUE (usn);");
+
+    // --- THIS IS THE FIX ---
+    // We must check if the constraint exists before trying to add it.
+
+    // Check for and add the email unique constraint
+    $check_email_constraint = $pdo->query("
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'students_email_unique'
+    ");
+    if ($check_email_constraint->fetch() === false) {
+        $pdo->exec("ALTER TABLE students ADD CONSTRAINT students_email_unique UNIQUE (email);");
+    }
+
+    // Check for and add the USN unique constraint
+    $check_usn_constraint = $pdo->query("
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'students_usn_unique'
+    ");
+    if ($check_usn_constraint->fetch() === false) {
+        $pdo->exec("ALTER TABLE students ADD CONSTRAINT students_usn_unique UNIQUE (usn);");
+    }
+    // --- END OF FIX ---
+
 
     // --- Users Table (for Staff/Admin) ---
     $pdo->exec("CREATE TABLE IF NOT EXISTS users (
@@ -69,7 +92,7 @@ try {
         role VARCHAR(20) NOT NULL DEFAULT 'student' -- e.g., 'student', 'staff', 'admin'
     );");
 
-    // --- NEW: Semesters Table ---
+    // --- Semesters Table ---
     $pdo->exec("CREATE TABLE IF NOT EXISTS semesters (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL UNIQUE -- e.g., '1st Semester', '2nd Semester'
@@ -79,13 +102,10 @@ try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS classes (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL UNIQUE,
-        semester_id INT -- This is the new column
+        semester_id INT
     );");
-    // Add the foreign key constraint if it doesn't exist
     $pdo->exec("ALTER TABLE classes ADD COLUMN IF NOT EXISTS semester_id INT;");
-    // Note: We are not adding a foreign key constraint here to avoid errors if 'semesters' table is created after.
-    // In a full migration system, you'd add:
-    // FOREIGN KEY (semester_id) REFERENCES semesters(id) ON DELETE SET NULL
+
 
     // --- Subjects Table ---
     $pdo->exec("CREATE TABLE IF NOT EXISTS subjects (
@@ -97,8 +117,8 @@ try {
     // --- Subject Allocation Table ---
     $pdo->exec("CREATE TABLE IF NOT EXISTS subject_allocation (
         id SERIAL PRIMARY KEY,
-        staff_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        subject_id INT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        staff_id INT NOT NULL, -- We'll add FK after users table exists
+        subject_id INT NOT NULL, -- We'll add FK after subjects table exists
         UNIQUE(staff_id, subject_id)
     );");
     
@@ -107,15 +127,15 @@ try {
         id SERIAL PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
         content TEXT,
-        subject_id INT REFERENCES subjects(id) ON DELETE SET NULL
+        subject_id INT -- We'll add FK after subjects table exists
     );");
     $pdo->exec("ALTER TABLE question_papers ADD COLUMN IF NOT EXISTS subject_id INT;");
 
     // --- Test Allocation Table ---
     $pdo->exec("CREATE TABLE IF NOT EXISTS test_allocation (
         id SERIAL PRIMARY KEY,
-        class_id INT NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
-        qp_id INT NOT NULL REFERENCES question_papers(id) ON DELETE CASCADE,
+        class_id INT NOT NULL, -- We'll add FK after classes table exists
+        qp_id INT NOT NULL, -- We'll add FK after question_papers table exists
         UNIQUE(class_id, qp_id)
     );");
     
