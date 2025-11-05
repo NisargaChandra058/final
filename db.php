@@ -42,8 +42,17 @@ function run_migration(PDO $pdo, string $migration_id, string $sql) {
         }
         // If it was already run (fetch() returned true), do nothing.
     } catch (PDOException $e) {
-        // If the migration fails, show a clear error.
-        die("Migration failed ($migration_id): " . $e->getMessage());
+        // This will catch errors like "relation already exists" and ignore them if
+        // the migration was run manually, but it's better to let the log work.
+        // For a critical failure, we will show the error.
+        if ($e->getCode() === '42P07') { // 42P07 = duplicate_table/relation_already_exists
+            // The relation already exists, but wasn't logged. Let's log it.
+            $log_stmt = $pdo->prepare("INSERT INTO db_migrations (migration_id) VALUES (?) ON CONFLICT DO NOTHING");
+            $log_stmt->execute([$migration_id]);
+        } else {
+            // A different, more serious error occurred.
+             die("Migration failed ($migration_id): " . $e->getMessage());
+        }
     }
 }
 
@@ -142,21 +151,17 @@ try {
     // --- 3. RUN ALL "ALTER TABLE" MIGRATIONS ---
     // These will now only run ONCE.
     
-    // Add columns
+    // Add columns (These are safe because they already use IF NOT EXISTS)
     run_migration($pdo, 'add_students_password', "ALTER TABLE students ADD COLUMN IF NOT EXISTS password VARCHAR(255);");
     run_migration($pdo, 'add_students_usn', "ALTER TABLE students ADD COLUMN IF NOT EXISTS usn VARCHAR(20);");
     run_migration($pdo, 'add_classes_semester_id', "ALTER TABLE classes ADD COLUMN IF NOT EXISTS semester_id INT;");
     run_migration($pdo, 'add_qp_subject_id', "ALTER TABLE question_papers ADD COLUMN IF NOT EXISTS subject_id INT;");
 
-    // Add constraints
+    // Add constraints (This is the critical fix)
+    // This SQL is correct for PostgreSQL and will not use "IF NOT EXISTS".
+    // The run_migration function will prevent it from running more than once.
     run_migration($pdo, 'add_constraint_students_email', "ALTER TABLE students ADD CONSTRAINT students_email_unique UNIQUE (email);");
     run_migration($pdo, 'add_constraint_students_usn', "ALTER TABLE students ADD CONSTRAINT students_usn_unique UNIQUE (usn);");
-
-    // Add Foreign Keys (Example)
-    // You can now safely add all your foreign keys here.
-    // run_migration($pdo, 'add_fk_classes_semester', "ALTER TABLE classes ADD CONSTRAINT fk_semester FOREIGN KEY (semester_id) REFERENCES semesters(id) ON DELETE SET NULL;");
-    // run_migration($pdo, 'add_fk_subject_alloc_staff', "ALTER TABLE subject_allocation ADD CONSTRAINT fk_staff FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE CASCADE;");
-    // run_migration($pdo, 'add_fk_subject_alloc_subject', "ALTER TABLE subject_allocation ADD CONSTRAINT fk_subject FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE;");
     
 } catch (PDOException $e) {
     die("Database connection failed: " . $e->getMessage());
