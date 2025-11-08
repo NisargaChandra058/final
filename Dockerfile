@@ -1,6 +1,12 @@
 # Use the official PHP image with Apache web server
 FROM php:8.2-apache
 
+# Enable Apache's rewrite module
+RUN a2enmod rewrite
+
+# Copy the custom Apache configuration to allow .htaccess
+COPY apache/000-default.conf /etc/apache2/sites-available/000-default.conf
+
 # Install system dependencies required for PHP extensions
 RUN apt-get update && apt-get install -y \
     libpq-dev \
@@ -27,8 +33,20 @@ COPY composer.json .
 RUN composer install
 
 # Copy the rest of the application source code
-# This will copy index.php, admin.php, etc.
 COPY src/ .
 
-# Ensure the uploads directory and all files are writable by the web server
-RUN mkdir -p uploads && chown -R www-data:www-data /var/www/html
+# --- PERMISSIONS FIX ---
+
+# 1. Create a writable directory for PHP sessions
+RUN mkdir -p /var/www/sessions
+
+# 2. Change the owner of ALL files and folders to the Apache user
+# This includes /var/www/html (app code), /var/www/html/uploads, and /var/www/sessions
+RUN chown -R www-data:www-data /var/www/html
+RUN chown -R www-data:www-data /var/www/sessions
+
+# 3. Explicitly grant read/write permissions
+RUN chmod -R 755 /var/www/html
+RUN chmod -R 775 /var/www/sessions
+
+# --- END FIX ---
