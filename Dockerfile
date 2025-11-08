@@ -1,14 +1,6 @@
 # Use the official PHP image with Apache web server
 FROM php:8.2-apache
 
-# Enable Apache's rewrite module
-RUN a2enmod rewrite
-
-# --- THIS IS THE IMPORTANT LINE ---
-# Copy the custom Apache configuration to allow .htaccess
-COPY apache/000-default.conf /etc/apache2/sites-available/000-default.conf
-# --- END IMPORTANT LINE ---
-
 # Install system dependencies required for PHP extensions
 RUN apt-get update && apt-get install -y \
     libpq-dev \
@@ -35,6 +27,7 @@ COPY composer.json .
 RUN composer install
 
 # Copy the rest of the application source code
+# This will copy index.php, admin.php, etc.
 COPY src/ .
 
 # Ensure the uploads directory and all files are writable by the web server
