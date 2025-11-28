@@ -96,7 +96,7 @@ try {
         <!-- Add links relevant for staff as features are built -->
         <!-- <a href="view-timetable.php">View Timetables</a> -->
         <a href="enter-attendance.php">Enter Attendance</a>
-        <a href="enter-results.php">Enter IA Marks</a>
+       <!--  <a href="enter-results.php">Enter IA Marks</a> -->
         <a href="logout.php">Logout</a>
     </div>
 
