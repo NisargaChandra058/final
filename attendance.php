@@ -1,62 +1,40 @@
 <?php
-// 1. INCLUDE SESSION FIX (Crucial for Localhost)
-require_once 'session_config.php';
-
+// 1. Start Session
 session_start();
-// Enable error reporting
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
 require_once 'db.php'; // PDO Connection
 
-// =================================================================
-// DEBUGGING BLOCK (Removes Redirects)
-// =================================================================
-echo "<div style='background:#222; color:#fff; padding:20px; font-family:sans-serif; margin-bottom:20px; border-bottom: 5px solid red;'>";
-echo "<h2>🕵️ Authorization Debugger</h2>";
-
-// 1. Check Session
-if (!isset($_SESSION['user_id'])) {
-    echo "<h3 style='color:#ff4444'>❌ FAIL: You are not logged in.</h3>";
-    echo "<p>Session 'user_id' is missing.</p>";
-    echo "<a href='login.php' style='color:#4dabf7; font-weight:bold;'>Go to Login</a>";
-    echo "</div>";
-    exit;
-}
-echo "<p style='color:#00c851'>✅ Logged In (User ID: " . $_SESSION['user_id'] . ")</p>";
-
-// 2. Check Role
-$role = strtolower($_SESSION['role'] ?? 'none');
-echo "<p>Your Role: <strong>" . htmlspecialchars($role) . "</strong></p>";
-
+// 2. Authorization Check
 $allowed_roles = ['admin', 'staff', 'hod', 'principal'];
+$role = strtolower($_SESSION['role'] ?? '');
 
-if (!in_array($role, $allowed_roles)) {
-    echo "<h3 style='color:#ff4444'>❌ ACCESS DENIED</h3>";
-    echo "<p>This page is for <strong>Staff & Admins</strong> only.</p>";
-    if ($role === 'student') {
-        echo "<p>👉 <a href='student-dashboard.php' style='color:#4dabf7'>Go to Student Dashboard</a> to view your attendance.</p>";
-    }
-    echo "</div>";
+// If not logged in, go to Login
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
     exit;
 }
 
-echo "<p style='color:#00c851'>✅ Access Granted. Loading Page...</p>";
-echo "</div>"; 
-// =================================================================
-// END DEBUGGING
-// =================================================================
+// If logged in as Student, redirect to Student Dashboard
+if ($role === 'student') {
+    header("Location: student-dashboard.php");
+    exit;
+}
+
+// If logged in but wrong role (e.g., generic user)
+if (!in_array($role, $allowed_roles)) {
+    die("Access Denied: Staff only. <a href='logout.php'>Logout</a>");
+}
 
 $message = '';
 $attendance_records = [];
 $selected_date = $_GET['date'] ?? date('Y-m-d');
 $selected_subject = $_GET['subject_id'] ?? '';
 
-// 2. Fetch Data for Filters
+// 3. Fetch Data
 try {
+    // Fetch Subjects
     $subjects = $pdo->query("SELECT id, name FROM subjects ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
     
-    // 3. Fetch Attendance Records if filter selected
+    // Fetch Attendance Records if filter selected
     if ($selected_subject) {
         $sql = "
             SELECT 
@@ -105,6 +83,7 @@ try {
         .no-data { text-align: center; padding: 20px; color: #666; font-style: italic; }
         .error { color: red; background: #fee; padding: 10px; margin-bottom: 10px; }
         .nav-link { display: block; margin-top: 20px; text-align: center; color: #666; text-decoration: none; }
+        .btn { text-decoration: none; background: #28a745; color: white; padding: 10px 15px; border-radius: 5px; }
     </style>
 </head>
 <body>
@@ -141,6 +120,7 @@ try {
                 <tbody>
                     <?php foreach ($attendance_records as $row): ?>
                         <tr>
+                            <!-- Fixed: Using ?? '' to prevent null errors -->
                             <td><?= htmlspecialchars($row['student_name'] ?? 'Unknown') ?></td>
                             <td><?= htmlspecialchars($row['usn'] ?? '-') ?></td>
                             <td>
@@ -159,8 +139,8 @@ try {
         <?php endif; ?>
     <?php endif; ?>
     
-    <div style="text-align:center; margin-top:20px;">
-        <a href="enter-attendance-daily.php" class="btn" style="text-decoration:none; background:#28a745; color:white; padding:10px 15px; border-radius:5px;">📝 Enter New Attendance</a>
+    <div style="text-align:center; margin-top:30px;">
+        <a href="enter-attendance-daily.php" class="btn">📝 Enter New Attendance</a>
     </div>
     
     <a href="admin-panel.php" class="nav-link">&laquo; Back to Dashboard</a>
